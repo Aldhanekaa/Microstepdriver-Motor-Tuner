@@ -3,13 +3,10 @@
 #define LIMIT_SWITCH_PIN 22
 
 
-// KONFIGURASI LIFTER
-#define MOTOR_CW LOW 
-#define MOTOR_CCW HIGH
 
 // KONFIGURASI YANG BAWAH
-// #define MOTOR_CW LOW 
-// #define MOTOR_CCW HIGH
+#define MOTOR_CW LOW 
+#define MOTOR_CCW HIGH
 
 // TOTAL HORIZONTAL PATCH = 2484 ; 2519 ; 2529 ; 
 // 2480 ; 2480; ; 2480
@@ -50,53 +47,19 @@ void setup() {
 }
 
 void loop() {
-
   receiveCommand();
-  if (isEnabled) {
 
-    // Serial.println(F("RUNNING..."));
-
-    // Keep trying to reset position until homed
-    if (!isHomed) {
-      Serial.println(F("Homing retry..."));
-
-      isHomed = resetPos(STEP_PIN, 3000); // retry homing in small batches
-      delay(10);
-      return; // skip normal motion until homed
-    }
+  if (isEnabled && !isHomed) {
+    Serial.println(F("Homing retry..."));
+    isHomed = resetPos(STEP_PIN, 3000);
 
     if (isHomed) {
-        Serial.println("ARRIVED AT HOME! ");
-        Serial.print("Total Ticks to Home");
-      Serial.println(totalTicksToHome);
-
-    }else {
-      Serial.print("Is Already Homed? ");
-      Serial.println(digitalRead(LIMIT_SWITCH_PIN) == HIGH);
-
+      Serial.println(F("Homing complete."));
+      Serial.println(F("Ready. Type CW or CCW."));
     }
-  }else {
-    Serial.println("Code is disabled");
-  }
 
-}
-
-void receiveCommand() {
-  if (Serial.available() == 0) {
-    return;
+    delay(10);
   }
-
-  String command = Serial.readStringUntil('\n');
-  command.trim();
-  command.toUpperCase();
-
-  if (command == "E") {
-    isEnabled = true;
-  }
-  else if (command == "D") {
-    isEnabled = false;
-  }
-  
 }
 
 
@@ -142,17 +105,84 @@ bool resetPos(int pin, long maxSteps) {
 }
 
 void runMotor(int pin, long steps, long current, int direction) {
-  long delta = steps - current;
-  if (delta == 0) return;
+  if (steps <= 0) {
+    return;
+  }
 
-  // Set direction based on target relation
-  digitalWrite(DIR_PIN, (direction == 1) ? HIGH : LOW);
+  digitalWrite(DIR_PIN, direction);
+  delayMicroseconds(20);
 
-  long count = labs(delta);
-  for (long i = 0; i < count; i++) {
+  long i = 0;
+  do {
+    if ((direction == CW && digitalRead(LIMIT_SWITCH_PIN) == HIGH)) {
+      Serial.println(F("Limit switch activated. Motor stopped."));
+      isHomed = true;
+      currentTicks = 0;
+      targetTicks = 0;
+      return;
+    }
+
     digitalWrite(pin, HIGH);
     delayMicroseconds(400);
     digitalWrite(pin, LOW);
     delayMicroseconds(200);
+
+    i++;
+  } while (i < steps);
+
+  if (direction == MOTOR_CW) {
+    currentTicks += steps;
+  } else {
+    currentTicks -= steps;
+  }
+
+  targetTicks = currentTicks;
+}
+
+void receiveCommand() {
+  if (Serial.available() == 0) {
+    return;
+  }
+
+  String command = Serial.readStringUntil('\n');
+  command.trim();
+  command.toUpperCase();
+
+  if (command == "E") {
+    isEnabled = true;
+    Serial.println(F("Motor enabled."));
+  }
+  else if (command == "D") {
+    isEnabled = false;
+    Serial.println(F("Motor disabled."));
+  }
+  else if (command == "CW" || command == "CCW") {
+    if (!isEnabled) {
+      Serial.println(F("Cannot run: motor is disabled. Send E first."));
+      return;
+    }
+
+    if (!isHomed) {
+      Serial.println(F("Cannot run: motor is not homed."));
+      return;
+    }
+
+    bool clockwise = command == "CW";
+    int direction = clockwise ? MOTOR_CW : MOTOR_CCW;
+    Serial.println(clockwise ? F("Running clockwise...") : F("Running counterclockwise..."));
+
+    runMotor(STEP_PIN, 250, currentTicks, direction);
+
+    Serial.println(clockwise ? F("CW movement complete.") : F("CCW movement complete."));
+    Serial.print(F("Current ticks: "));
+    Serial.println(currentTicks);
+    Serial.print(F("Current angle: "));
+    Serial.print(ticksToAngle(currentTicks, totalRevStepsWithRatio), 2);
+    Serial.println(F(" degrees"));
+  }
+  else if (command.length() > 0) {
+    Serial.print(F("Unknown command: "));
+    Serial.println(command);
+    Serial.println(F("Use E, D, CW, or CCW."));
   }
 }
