@@ -27,7 +27,6 @@ const double totalRevStepsWithRatio = totalRevSteps / gearRatio;
 
 uint8_t currentStep = 0;                               // 1..8
 bool isHomed = false;
-
 bool isEnabled = false;
 
 
@@ -100,18 +99,6 @@ void receiveCommand() {
 }
 
 
-double calculateCurrentAngle(long ticks, double stepsPerRev) {
-  return (ticks / stepsPerRev) * 360.0;
-}
-
-long angleToTicks(double angle, double stepsPerRev) {
-  return lround(angle * (stepsPerRev / 360.0));
-}
-
-double ticksToAngle(long ticks, double stepsPerRev) {
-  return ticks * (360.0 / stepsPerRev);
-}
-
 // Returns true if homed, false if not yet homed after maxSteps tries
 bool resetPos(int pin, long maxSteps) {
   digitalWrite(DIR_PIN, MOTOR_CW); // move toward home direction
@@ -156,3 +143,4 @@ void runMotor(int pin, long steps, long current, int direction) {
     delayMicroseconds(200);
   }
 }
+
